@@ -26,7 +26,7 @@ const EMPTY: PulseView = {
 // A hot reload keeps $.state, so a value saved by an older version may lack newer fields.
 export const normalizePulse = (held: Partial<PulseView>): PulseView => ({ ...EMPTY, ...held })
 
-const pulse = atom({ plugin: 'gauge', key: 'pulse' } as const, EMPTY)
+const pulse = atom({ plugin: 'simple-status-line', key: 'pulse' } as const, EMPTY)
 
 async function readPulse($: EngineInterface) {
   return normalizePulse(await read($, pulse))
@@ -35,7 +35,7 @@ async function readPulse($: EngineInterface) {
 async function updatePulse($: EngineInterface, change: (held: PulseView) => PulseView) {
   return update($, pulse, stored => change(normalizePulse(stored)))
 }
-const cost = atom({ plugin: 'gauge', key: 'cost' } as const, null)
+const cost = atom({ plugin: 'simple-status-line', key: 'cost' } as const, null)
 
 const fileOf = (e: object) => ('file_path' in e && typeof e.file_path === 'string' ? e.file_path : null)
 

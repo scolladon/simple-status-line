@@ -1,5 +1,5 @@
 {
   "name": "simple-status-line",
   "owner": { "name": "scolladon" },
-  "plugins": [{ "name": "gauge", "source": "./" }]
+  "plugins": [{ "name": "simple-status-line", "source": "./" }]
 }

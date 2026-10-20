@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 const NOW = Date.parse('2026-10-20T10:00:00Z')
 
 const BAND = {
-  plugin: 'gauge',
+  plugin: 'simple-status-line',
   component: 'AbovePrompt',
   surface: 'terminal',
   props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120 },

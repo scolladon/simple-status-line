@@ -23,9 +23,9 @@ const ACTION_GLYPH: Record<ActionKind, string> = { read: '›', write: '✎', co
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type Row = { id: string; name: string; status: AgentStatus; action: Action | undefined }
 
-const tasks = atom({ plugin: 'gauge', key: 'tasks' } as const, [])
-const actions = atom({ plugin: 'gauge', key: 'actions' } as const, {})
-const agents = atom({ plugin: 'gauge', key: 'agents' } as const, [])
+const tasks = atom({ plugin: 'simple-status-line', key: 'tasks' } as const, [])
+const actions = atom({ plugin: 'simple-status-line', key: 'actions' } as const, {})
+const agents = atom({ plugin: 'simple-status-line', key: 'agents' } as const, [])
 
 let cwd = ''
 let lastAgentRefresh = 0

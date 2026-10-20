@@ -9,7 +9,7 @@ const GIT_TIMEOUT_MS = 5000
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type GitStatus = Pick<WorkspaceView, 'branch' | 'ahead' | 'behind' | 'changed'>
 
-const workspace = atom({ plugin: 'gauge', key: 'workspace' } as const, null)
+const workspace = atom({ plugin: 'simple-status-line', key: 'workspace' } as const, null)
 
 let cwd = ''
 let home = ''
@@ -72,7 +72,7 @@ export async function refreshWorkspace($: EngineInterface) {
     await update($, workspace, () => view)
   } catch (error) {
     // The previous view stays on screen; git missing or hung is not worth a toast.
-    $.ui.log(`gauge: git refresh failed in ${cwd}: ${String(error)}`, { to: 'debug' })
+    $.ui.log(`simple-status-line: git refresh failed in ${cwd}: ${String(error)}`, { to: 'debug' })
   } finally {
     isRefreshing = false
   }

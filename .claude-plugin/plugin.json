@@ -1,7 +1,7 @@
 {
-  "name": "gauge",
+  "name": "simple-status-line",
   "version": "0.1.0",
-  "description": "Three quiet rows above the prompt: usage limits, context content with its auto-compact mark, prompt-cache hit and warmth with a one-shot Warm button.",
+  "description": "A quiet three-pane band above the prompt: task and agents; path, git and turn pulse; session cost, cache warmth with a one-shot Warm button, 5h and 7d limits, and context by category with its auto-compact mark.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "cacheTtl": {

@@ -1,6 +1,6 @@
 # simple-status-line
 
-A Claude Code mod (`gauge`) that draws a quiet three-pane band above the prompt.
+A Claude Code mod that draws a quiet three-pane band above the prompt.
 
 ```
  task + agents          │   path · git · worktree   │  session cost · cache hit · warm
@@ -18,7 +18,7 @@ Below 100 columns only the right-pane gauges are shown.
 At the prompt of a terminal session:
 
 ```
-/plugin install gauge --marketplace scolladon/simple-status-line
+/plugin install simple-status-line --marketplace scolladon/simple-status-line
 ```
 
 Answer `y` to add the marketplace, then pick a scope.
@@ -26,7 +26,7 @@ Answer `y` to add the marketplace, then pick a scope.
 From a shell:
 
 ```
-claude plugin install gauge --marketplace scolladon/simple-status-line
+claude plugin install simple-status-line --marketplace scolladon/simple-status-line
 ```
 
 In the desktop app: click + next to the prompt box, then Plugins, Add marketplace with `scolladon/simple-status-line`, then Add plugin.

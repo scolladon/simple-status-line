@@ -58,7 +58,7 @@ export type PulseView = {
 
 declare module 'claude-code' {
   interface PluginState {
-    gauge: {
+    'simple-status-line': {
       limits: LimitWindow[]
       context: ContextView | null
       cache: CacheView

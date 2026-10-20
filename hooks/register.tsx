@@ -57,14 +57,14 @@ type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type ButtonTags = Tags & Pick<Elements['terminal'], 'Button'>
 type Stored = { at: number; windows: LimitWindow[] }
 
-const limits = atom({ plugin: 'gauge', key: 'limits' } as const, [])
-const context = atom({ plugin: 'gauge', key: 'context' } as const, null)
-const cache = atom({ plugin: 'gauge', key: 'cache' } as const, {
+const limits = atom({ plugin: 'simple-status-line', key: 'limits' } as const, [])
+const context = atom({ plugin: 'simple-status-line', key: 'context' } as const, null)
+const cache = atom({ plugin: 'simple-status-line', key: 'cache' } as const, {
   hitPercent: null,
   sentAt: null,
   isWarming: false,
 })
-const now = atom({ plugin: 'gauge', key: 'now' } as const, 0)
+const now = atom({ plugin: 'simple-status-line', key: 'now' } as const, 0)
 
 // Module-local on purpose: a reload starts these over, which only costs one missed tick.
 let isTurnRunning = false
@@ -197,7 +197,7 @@ async function warm($: EngineInterface) {
     if (result.isAnswered) {
       await update($, cache, view => ({ ...view, sentAt: at }))
     } else {
-      $.ui.toast(`gauge: warm-up not sent (${result.reason})`)
+      $.ui.toast(`simple-status-line: warm-up not sent (${result.reason})`)
     }
   } finally {
     isForking = false
