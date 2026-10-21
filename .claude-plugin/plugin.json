@@ -1,6 +1,6 @@
 {
   "name": "simple-status-line",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A quiet three-pane band above the prompt: task and agents; path, git and turn pulse; session cost, cache warmth with a one-shot Warm button, 5h and 7d limits, and context by category with its auto-compact mark.",
   "types": "./types/index.d.ts",
   "userConfig": {
