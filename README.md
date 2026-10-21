@@ -7,7 +7,7 @@ A Claude Code mod that draws a quiet three-pane band above the prompt.
  (status, file/command) │   turn pulse · last error │  limit 5h / limit 7d · context
 ```
 
-- **Left**: current task, agents with status and their latest file or command.
+- **Left**: current task, one `⧗` row per background shell or monitor (refreshed at turn end), agents with status and their latest file or command.
 - **Center**: path, git repo · branch · ahead/behind · changes, linked worktree, turn pulse (elapsed · tools · files · tokens out · failures), last failure.
 - **Right**: session cost, cache hit rate and time until cold with a one-shot `Warm` button (no automatic warming), 5h and 7d limits with pace marks, context bar by category with the auto-compact mark.
 

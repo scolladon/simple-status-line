@@ -21,6 +21,8 @@ export type AgentView = {
   status: 'pending' | 'running' | 'waiting' | 'idle' | 'completed' | 'failed' | 'killed'
 }
 
+export type BackgroundView = { id: string; kind: string; label: string }
+
 export type TaskItem = {
   id: string
   subject: string
@@ -66,6 +68,7 @@ declare module 'claude-code' {
       tasks: TaskItem[]
       actions: Record<string, Action>
       agents: AgentView[]
+      background: BackgroundView[]
       workspace: WorkspaceView | null
       pulse: PulseView
       cost: number | null
