@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentStatus, Color, Elements, EngineInterface, On } from 'claude-code'
 
-import type { Action, ActionKind, AgentView, TaskItem } from '../types'
+import type { Action, ActionKind, AgentView, BackgroundView, TaskItem } from '../types'
 
 const MAIN = 'main'
 const MAIN_LABEL = 'main'
@@ -19,13 +19,19 @@ const STATUS_GLYPH: Record<AgentStatus, { glyph: string; color: Color }> = {
   killed: { glyph: '✗', color: 'inactive' },
 }
 const ACTION_GLYPH: Record<ActionKind, string> = { read: '›', write: '✎', command: '$' }
+const BACKGROUND_GLYPH: Record<string, string> = { shell: '$', monitor: '◉' }
+const BACKGROUND_FALLBACK_GLYPH = '◆'
+// Background subagents already have their own agent row.
+const SUBAGENT_KIND = 'subagent'
 
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type Row = { id: string; name: string; status: AgentStatus; action: Action | undefined }
+type BackgroundSummary = { id: string; type: string; description: string; command?: string }
 
 const tasks = atom({ plugin: 'simple-status-line', key: 'tasks' } as const, [])
 const actions = atom({ plugin: 'simple-status-line', key: 'actions' } as const, {})
 const agents = atom({ plugin: 'simple-status-line', key: 'agents' } as const, [])
+const background = atom({ plugin: 'simple-status-line', key: 'background' } as const, [])
 
 let cwd = ''
 let lastAgentRefresh = 0
@@ -71,6 +77,19 @@ const createdTaskId = (result: unknown): string | undefined => {
 
 const patchTask = (list: readonly TaskItem[], id: string, patch: Partial<TaskItem>) =>
   list.map(task => (task.id === id ? { ...task, ...patch } : task))
+
+const toBackground = (summaries: readonly BackgroundSummary[]): BackgroundView[] =>
+  summaries
+    .filter(summary => summary.type !== SUBAGENT_KIND)
+    .map(summary => ({
+      id: summary.id,
+      kind: summary.type,
+      label: firstLine(summary.command ?? summary.description),
+    }))
+
+async function recordBackground($: EngineInterface, summaries: readonly BackgroundSummary[] | undefined) {
+  await update($, background, () => toBackground(summaries ?? []))
+}
 
 export async function startActivity($: EngineInterface, workingDirectory: string) {
   cwd = workingDirectory
@@ -150,8 +169,15 @@ export const registerActivity = (on: On) => {
   on('classic.SubagentStop', async ($, e, next) => {
     const result = await next(e)
     await refreshAgents($)
+    await recordBackground($, e.background_tasks)
 
     return result
+  }).catch(($, e, next) => next(e))
+
+  on('classic.Stop', async ($, e, next) => {
+    await recordBackground($, e.background_tasks)
+
+    return next(e)
   }).catch(($, e, next) => next(e))
 }
 
@@ -187,6 +213,14 @@ const taskRow = ({ Box, Text }: Tags, list: readonly TaskItem[], isDim: boolean)
   )
 }
 
+const backgroundRow = ({ Box, Text }: Tags, view: BackgroundView, isDim: boolean) => (
+  <Box key={`bg-${view.id}`}>
+    <Text dimColor={isDim} wrap="truncate-end">
+      {`⧗ ${BACKGROUND_GLYPH[view.kind] ?? BACKGROUND_FALLBACK_GLYPH} ${view.label}`}
+    </Text>
+  </Box>
+)
+
 const actionText = ({ Text }: Tags, action: Action | undefined, isDim: boolean) => {
   if (action === undefined) {
     return <Text dimColor>–</Text>
@@ -220,17 +254,24 @@ const agentRow = (tags: Tags, row: Row, nameWidth: number, isPaneIdle: boolean) 
 export async function activityPane($: EngineInterface, tags: Tags, isWorking: boolean, height: number) {
   const list = await read($, tasks)
   const rows = rowsOf(await read($, agents), await read($, actions), isWorking)
+  const running = await read($, background)
   const isPaneIdle = !isWorking && !rows.some(row => row.id !== MAIN && LIVE.includes(row.status))
   const slots = Math.max(1, height - 1)
-  const isOverflowing = rows.length > slots
-  const shown = isOverflowing ? rows.slice(0, slots - 1) : rows
-  const nameWidth = Math.min(NAME_MAX, Math.max(...shown.map(row => row.name.length)))
+  const total = running.length + rows.length
+  const isOverflowing = total > slots
+  const budget = isOverflowing ? slots - 1 : slots
+  const shownBackground = running.slice(0, budget)
+  const shown = rows.slice(0, budget - shownBackground.length)
+  const nameWidth = Math.min(NAME_MAX, Math.max(0, ...shown.map(row => row.name.length)))
 
   return (
     <tags.Box flexDirection="column">
       {taskRow(tags, list, isPaneIdle)}
+      {shownBackground.map(view => backgroundRow(tags, view, isPaneIdle))}
       {shown.map(row => agentRow(tags, row, nameWidth, isPaneIdle))}
-      {isOverflowing && <tags.Text key="more" dimColor>{`+${rows.length - shown.length} more`}</tags.Text>}
+      {isOverflowing && (
+        <tags.Text key="more" dimColor>{`+${total - shownBackground.length - shown.length} more`}</tags.Text>
+      )}
     </tags.Box>
   )
 }

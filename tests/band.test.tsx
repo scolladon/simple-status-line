@@ -117,3 +117,71 @@ test('Given a running subagent and a command, When the band draws wide, Then the
   expect(texts).toContain('repo-wt')
   await sut.unmount()
 })
+
+test('Given background shell, monitor and subagent at stop, When the band draws wide, Then one row each lists shell and monitor below the task', async ($, on) => {
+  // Arrange
+  on('clock.now', () => ({ value: NOW }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('agent.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: '/home/me' }))
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a git repository' } }))
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('classic.Stop', () => ({}))
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.Stop({
+    stop_hook_active: false,
+    background_tasks: [
+      { id: 'b1', type: 'shell', status: 'running', description: 'dev server', command: 'npm run dev\n--watch' },
+      { id: 'm1', type: 'monitor', status: 'running', description: 'watch ci' },
+      { id: 's1', type: 'subagent', status: 'running', description: 'scan', agent_type: 'Explore' },
+    ],
+  })
+
+  // Act
+  const sut = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 } })
+  const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
+
+  // Assert
+  const taskAt = texts.indexOf('▸ no task')
+  expect(texts.indexOf('⧗ $ npm run dev')).toBe(taskAt + 1)
+  expect(texts.indexOf('⧗ ◉ watch ci')).toBe(taskAt + 2)
+  expect(texts.some(text => text.includes('scan'))).toBe(false)
+  await sut.unmount()
+})
+
+test('Given no background work at stop, When the band draws wide, Then no background row shows', async ($, on) => {
+  // Arrange
+  on('clock.now', () => ({ value: NOW }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('agent.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: '/home/me' }))
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a git repository' } }))
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('classic.Stop', () => ({}))
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+
+  // Act
+  const sut = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 } })
+  const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
+
+  // Assert
+  expect(texts.some(text => text.startsWith('⧗'))).toBe(false)
+  await sut.unmount()
+})
