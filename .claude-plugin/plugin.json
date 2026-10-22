@@ -1,7 +1,7 @@
 {
   "name": "simple-status-line",
   "version": "0.3.0",
-  "description": "A quiet three-pane band above the prompt: task and agents; path, git and turn pulse; session cost, cache warmth with a one-shot Warm button, 5h and 7d limits, and context by category with its auto-compact mark.",
+  "description": "A quiet two-pane band above the prompt: turn pulse, task and agents on the left; model, session cost, cache warmth with a one-shot Warm button, path and git, 5h and 7d limits, and context by category with its auto-compact ceiling on the right.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "cacheTtl": {

@@ -159,15 +159,14 @@ const failureRow = ({ Text }: Tags, failure: Failure) => {
   )
 }
 
-export async function pulseRows($: EngineInterface, tags: Tags, at: number) {
+export async function pulseLine($: EngineInterface, tags: Tags, at: number) {
   const view = await readPulse($)
 
-  if (view.startedAt === null) {
-    return []
-  }
+  return view.startedAt === null ? [] : [<tags.Box key="turn">{stats(tags, view, at)}</tags.Box>]
+}
 
-  return [
-    <tags.Box key="turn">{stats(tags, view, at)}</tags.Box>,
-    ...(view.lastFailure === null ? [] : [failureRow(tags, view.lastFailure)]),
-  ]
+export async function failureLine($: EngineInterface, tags: Tags) {
+  const view = await readPulse($)
+
+  return view.startedAt === null || view.lastFailure === null ? [] : [failureRow(tags, view.lastFailure)]
 }

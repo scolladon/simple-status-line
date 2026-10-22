@@ -1,7 +1,8 @@
 import { atom, read, update } from 'claude-code'
-import type { Elements, EngineInterface, On } from 'claude-code'
+import type { Color, Elements, EngineInterface, On } from 'claude-code'
 
 import type { WorkspaceView } from '../types'
+import type { Line } from './line'
 
 const GIT_TIMEOUT_MS = 5000
 const BRANCH_GLYPH = '⎇ '
@@ -95,37 +96,58 @@ export const registerWorkspace = (on: On) => {
   }).catch(($, e, next) => next(e))
 }
 
-const gitLine = ({ Text }: Tags, view: WorkspaceView) => {
+const PATH_GAP = ' · '
+
+type Segment = { text: string; color?: Color; isBold?: boolean; isDim?: boolean }
+
+const gitSegments = (view: WorkspaceView): Segment[] => {
   if (view.repo === null) {
-    return <Text dimColor>not a repository</Text>
+    return [{ text: 'not a repository', isDim: true }]
   }
 
   const sync = [view.ahead > 0 ? `↑${view.ahead}` : '', view.behind > 0 ? `↓${view.behind}` : ''].filter(part => part !== '')
   // The path already ends with the repo name when opened at its root; repeating it is noise.
-  const isRepoInPath = basename(view.path) === view.repo
+  const repo: Segment[] = basename(view.path) === view.repo ? [] : [{ text: view.repo, isBold: true }, { text: ' · ', isDim: true }]
 
-  return (
-    <Text wrap="truncate-end">
-      <Text dimColor>{BRANCH_GLYPH}</Text>
-      {!isRepoInPath && <Text bold>{view.repo}</Text>}
-      {!isRepoInPath && <Text dimColor> · </Text>}
-      <Text color="suggestion">{view.branch ?? 'detached'}</Text>
-      {view.worktree !== null && <Text color="warning">{` ${WORKTREE_GLYPH} ${view.worktree}`}</Text>}
-      {sync.length > 0 && <Text color="warning">{` ${sync.join(' ')}`}</Text>}
-      <Text dimColor>{view.changed > 0 ? ` · ${view.changed} changed` : ' · clean'}</Text>
-    </Text>
-  )
+  return [
+    { text: BRANCH_GLYPH, isDim: true },
+    ...repo,
+    { text: view.branch ?? 'detached', color: 'suggestion' },
+    ...(view.worktree === null ? [] : [{ text: ` ${WORKTREE_GLYPH} ${view.worktree}`, color: 'warning' }]),
+    ...(sync.length === 0 ? [] : [{ text: ` ${sync.join(' ')}`, color: 'warning' }]),
+    { text: view.changed > 0 ? ` · ${view.changed} changed` : ' · clean', isDim: true },
+  ]
 }
 
-export async function workspaceRows($: EngineInterface, tags: Tags) {
+const segmentText = ({ Text }: Tags, segment: Segment, index: number) => (
+  <Text key={String(index)} color={segment.color} bold={segment.isBold} dimColor={segment.isDim}>{segment.text}</Text>
+)
+
+// The width lets the right pane size itself to this line rather than to a share of the band.
+export async function workspaceLine($: EngineInterface, tags: Tags): Promise<Line | null> {
   const view = await read($, workspace)
 
   if (view === null) {
-    return []
+    return null
   }
 
-  return [
-    <tags.Text key="path" wrap="truncate-start">{view.path}</tags.Text>,
-    <tags.Box key="git">{gitLine(tags, view)}</tags.Box>,
-  ]
+  const segments = gitSegments(view)
+  const width = [view.path, PATH_GAP, ...segments.map(segment => segment.text)].join('').length
+
+  return {
+    width,
+    node: (
+      <tags.Box key="workspace" flexDirection="row">
+        <tags.Box flexShrink={1}>
+          <tags.Text wrap="truncate-start">{view.path}</tags.Text>
+        </tags.Box>
+        <tags.Box flexShrink={0}>
+          <tags.Text dimColor>{PATH_GAP}</tags.Text>
+        </tags.Box>
+        <tags.Box flexShrink={2}>
+          <tags.Text wrap="truncate-end">{segments.map((segment, index) => segmentText(tags, segment, index))}</tags.Text>
+        </tags.Box>
+      </tags.Box>
+    ),
+  }
 }
