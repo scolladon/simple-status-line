@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { AgentStatus, Color, Elements, EngineInterface, On } from 'claude-code'
+import type { AgentStatus, BuiltinToolInputs, Color, Elements, EngineInterface, On, ToolUseSummary } from 'claude-code'
 
 import type { Action, ActionKind, AgentView, BackgroundView, TaskItem } from '../types'
 
@@ -27,6 +27,12 @@ const SUBAGENT_KIND = 'subagent'
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type Row = { id: string; name: string; status: AgentStatus; action: Action | undefined }
 type BackgroundSummary = { id: string; type: string; description: string; command?: string }
+type TaskCall =
+  | { tool: 'TodoWrite'; input: BuiltinToolInputs['TodoWrite'] }
+  | { tool: 'TaskCreate'; input: BuiltinToolInputs['TaskCreate']; result: unknown }
+  | { tool: 'TaskUpdate'; input: BuiltinToolInputs['TaskUpdate'] }
+
+const TASK_TOOLS: readonly string[] = ['TodoWrite', 'TaskCreate', 'TaskUpdate']
 
 const tasks = atom({ plugin: 'simple-status-line', key: 'tasks' } as const, [])
 const actions = atom({ plugin: 'simple-status-line', key: 'actions' } as const, {})
@@ -78,6 +84,58 @@ const createdTaskId = (result: unknown): string | undefined => {
 const patchTask = (list: readonly TaskItem[], id: string, patch: Partial<TaskItem>) =>
   list.map(task => (task.id === id ? { ...task, ...patch } : task))
 
+const todoList = (input: BuiltinToolInputs['TodoWrite']): TaskItem[] =>
+  input.todos.map((todo, index) => ({
+    id: String(index),
+    subject: todo.content,
+    activeForm: todo.activeForm,
+    status: todo.status,
+  }))
+
+const createdTask = (input: BuiltinToolInputs['TaskCreate'], result: unknown): TaskItem[] => {
+  const id = createdTaskId(result)
+
+  return id === undefined ? [] : [{ id, subject: input.subject, activeForm: input.activeForm, status: 'pending' }]
+}
+
+const updatedTasks = (list: readonly TaskItem[], input: BuiltinToolInputs['TaskUpdate']) => {
+  if (input.status === 'deleted') {
+    return list.filter(task => task.id !== input.taskId)
+  }
+
+  const patch: Partial<TaskItem> = {
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.subject === undefined ? {} : { subject: input.subject }),
+    ...(input.activeForm === undefined ? {} : { activeForm: input.activeForm }),
+  }
+
+  return patchTask(list, input.taskId, patch)
+}
+
+const applyTaskCall = (list: readonly TaskItem[], call: TaskCall): TaskItem[] => {
+  switch (call.tool) {
+    case 'TodoWrite':
+      return todoList(call.input)
+    case 'TaskCreate':
+      return [...list, ...createdTask(call.input, call.result)]
+    case 'TaskUpdate':
+      return updatedTasks(list, call.input)
+  }
+}
+
+// Only answered calls changed the list; the transcript keeps only inputs the tool's schema accepted.
+const taskCallOf = (use: ToolUseSummary): TaskCall[] =>
+  TASK_TOOLS.includes(use.tool) && use.isError !== true && use.text !== undefined
+    ? [{ tool: use.tool, input: use.input, result: use.result } as TaskCall]
+    : []
+
+// A resumed session holds its tasks only in the transcript; nothing re-raises their calls.
+async function replayTasks($: EngineInterface) {
+  const messages = await $.session.messages()
+  const calls = messages.flatMap(message => message.toolUses).flatMap(taskCallOf)
+  await update($, tasks, () => calls.reduce(applyTaskCall, []))
+}
+
 const toBackground = (summaries: readonly BackgroundSummary[]): BackgroundView[] =>
   summaries
     .filter(summary => summary.type !== SUBAGENT_KIND)
@@ -93,6 +151,7 @@ async function recordBackground($: EngineInterface, summaries: readonly Backgrou
 
 export async function startActivity($: EngineInterface, workingDirectory: string) {
   cwd = workingDirectory
+  await replayTasks($)
   await refreshAgents($)
 }
 
@@ -122,40 +181,20 @@ export const registerActivity = (on: On) => {
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
-    const list: TaskItem[] = e.todos.map((todo, index) => ({
-      id: String(index),
-      subject: todo.content,
-      activeForm: todo.activeForm,
-      status: todo.status,
-    }))
-    await update($, tasks, () => list)
+    await update($, tasks, held => applyTaskCall(held, { tool: 'TodoWrite', input: e }))
 
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'TaskCreate' }, async ($, e, next) => {
     const ran = await next(e)
-    const id = createdTaskId(ran.result)
-
-    if (id !== undefined) {
-      const task: TaskItem = { id, subject: e.subject, activeForm: e.activeForm, status: 'pending' }
-      await update($, tasks, held => [...held, task])
-    }
+    await update($, tasks, held => applyTaskCall(held, { tool: 'TaskCreate', input: e, result: ran.result }))
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'TaskUpdate' }, async ($, e, next) => {
-    if (e.status === 'deleted') {
-      await update($, tasks, held => held.filter(task => task.id !== e.taskId))
-    } else {
-      const patch: Partial<TaskItem> = {
-        ...(e.status === undefined ? {} : { status: e.status }),
-        ...(e.subject === undefined ? {} : { subject: e.subject }),
-        ...(e.activeForm === undefined ? {} : { activeForm: e.activeForm }),
-      }
-      await update($, tasks, held => patchTask(held, e.taskId, patch))
-    }
+    await update($, tasks, held => applyTaskCall(held, { tool: 'TaskUpdate', input: e }))
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -194,7 +233,7 @@ const taskRow = ({ Box, Text }: Tags, list: readonly TaskItem[], isDim: boolean)
   if (list.length === 0) {
     return (
       <Box key="task">
-        <Text dimColor>▸ no task</Text>
+        <Text dimColor>▸ no todos</Text>
       </Box>
     )
   }
