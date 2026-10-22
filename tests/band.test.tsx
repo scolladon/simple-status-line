@@ -2,6 +2,8 @@ import { expect, test } from 'claude-code/testing'
 
 const NOW = Date.parse('2026-10-20T10:00:00Z')
 
+const MESSAGES: readonly unknown[] = []
+
 const BAND = {
   plugin: 'simple-status-line',
   component: 'AbovePrompt',
@@ -39,6 +41,7 @@ test('Given limits and a context breakdown, When the band draws, Then it shows e
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({ value: [] }))
   on('env.get', () => ({ value: '/home/me' }))
@@ -61,8 +64,9 @@ test('Given limits and a context breakdown, When the band draws, Then it shows e
   expect(texts).toContain('42%')
   expect(texts).toContain('2h30')
   expect(texts).toContain('3d 0h')
-  expect(texts).toContain('60k/200k')
-  expect(texts).toContain('· auto 167k')
+  expect(texts).toContain('60k/')
+  expect(texts).toContain('-200k')
+  expect(texts.some(text => text.includes('auto'))).toBe(false)
   expect(texts).toContain('messages 50k')
   expect(texts).toContain('–')
   expect(await sut.find({ type: 'Button', key: 'warm' })).toBeUndefined()
@@ -73,6 +77,7 @@ test('Given a running subagent and a command, When the band draws wide, Then the
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({
     value: [{ id: 'a1', type: 'Explore', description: 'scan', status: 'running' }],
@@ -105,7 +110,7 @@ test('Given a running subagent and a command, When the band draws wide, Then the
   const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
 
   // Assert
-  expect(texts).toContain('▸ no task')
+  expect(texts).toContain('▸ no todos')
   expect(texts).toContain('main')
   expect(texts).toContain('Explore')
   expect(texts).toContain('› src/app.ts')
@@ -124,6 +129,7 @@ test('Given background shell, monitor and subagent at stop, When the band draws 
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({ value: [] }))
   on('env.get', () => ({ value: '/home/me' }))
@@ -152,7 +158,7 @@ test('Given background shell, monitor and subagent at stop, When the band draws 
   const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
 
   // Assert
-  const taskAt = texts.indexOf('▸ no task')
+  const taskAt = texts.indexOf('▸ no todos')
   expect(texts.indexOf('⧗ $ npm run dev')).toBe(taskAt + 1)
   expect(texts.indexOf('⧗ ◉ watch ci')).toBe(taskAt + 2)
   expect(texts.some(text => text.includes('scan'))).toBe(false)
@@ -163,6 +169,7 @@ test('Given no background work at stop, When the band draws wide, Then no backgr
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({ value: [] }))
   on('env.get', () => ({ value: '/home/me' }))
@@ -188,10 +195,11 @@ test('Given no background work at stop, When the band draws wide, Then no backgr
   await sut.unmount()
 })
 
-test('Given a main-loop step with effort, When the band draws wide, Then the untitled center starts with model and effort', async ($, on) => {
+test('Given a main-loop step with effort, When the band draws wide, Then the left pane starts with the pulse and the right pane with model and effort', async ($, on) => {
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('session.model', () => ({ value: 'Opus 5.5' }))
   on('agent.list', () => ({ value: [] }))
@@ -222,7 +230,7 @@ test('Given a main-loop step with effort, When the band draws wide, Then the unt
   const modelAt = texts.indexOf('Opus 5.5 · high')
   expect(modelAt).toBeGreaterThanOrEqual(0)
   expect(modelAt).toBeLessThan(texts.indexOf('/'))
-  expect(texts).toContain('▶ ')
+  expect(texts.indexOf('▶ ')).toBeLessThan(texts.indexOf('▸ no todos'))
   expect(texts.some(text => ['Model', 'Path', 'Turn', 'Last turn'].includes(text))).toBe(false)
   await sut.unmount()
 })
@@ -231,6 +239,7 @@ test('Given both limit windows, When the band draws wide, Then they share one un
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({ value: [] }))
   on('env.get', () => ({ value: '/home/me' }))
@@ -262,6 +271,7 @@ test('Given a repository opened at its root, When the band draws wide, Then the 
   // Arrange
   on('clock.now', () => ({ value: NOW }))
   on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
   on('session.usage', () => ({ value: USAGE }))
   on('agent.list', () => ({ value: [] }))
   on('store.get', () => ({ value: undefined }))
@@ -292,5 +302,131 @@ test('Given a repository opened at its root, When the band draws wide, Then the 
   expect(texts).toContain('~/repo')
   expect(texts).toContain('main')
   expect(texts).not.toContain('repo')
+  await sut.unmount()
+})
+
+const quietSession = async (
+  $: Parameters<Parameters<typeof test>[1]>[0],
+  on: Parameters<Parameters<typeof test>[1]>[1],
+  MESSAGES: readonly unknown[] = [],
+) => {
+  on('clock.now', () => ({ value: NOW }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('agent.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: '/home/me' }))
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a git repository' } }))
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+}
+
+test('Given an auto-compact threshold, When the band draws, Then the usage names it between used and max in the mark colour', async ($, on) => {
+  // Arrange
+  await quietSession($, on)
+
+  // Act
+  const sut = await $.ui.mount(BAND)
+  const usage = await sut.find({ type: 'Text', text: /^60k\/167k-200k$/ })
+  const autoAt = await sut.find({ type: 'Text', text: /^167k$/ })
+  const mark = await sut.find({ type: 'Text', text: /^│$/ })
+
+  // Assert
+  expect(usage).toBeDefined()
+  expect(autoAt?.props.color).toBe('warning')
+  expect(mark?.props.color).toBe(autoAt?.props.color)
+  await sut.unmount()
+})
+
+test('Given short info lines, When the band draws wide, Then one separator splits a gauge-wide right pane from a left pane taking the rest', async ($, on) => {
+  // Arrange
+  await quietSession($, on)
+
+  // Act
+  const sut = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 } })
+  const right = await sut.find({ type: 'Box', key: 'right' })
+  const left = await sut.find({ type: 'Box', key: 'left' })
+  const separators = await sut.findAll({ type: 'Text', text: /^│(\n│)+$/ })
+
+  // Assert
+  expect(right?.props.width).toBe(48)
+  expect(left?.props.width).toBe(160 - 48 - 3)
+  expect(separators).toHaveLength(1)
+  await sut.unmount()
+})
+
+test('Given a long path and git line, When the band draws wide, Then the right pane widens to fit it on one line', async ($, on) => {
+  // Arrange
+  on('clock.now', () => ({ value: NOW }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.messages', () => ({ value: MESSAGES }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('agent.list', () => ({ value: [] }))
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('env.get', () => ({ value: '/home/me' }))
+  on('process.run', (_, e) => ({
+    value: {
+      exitCode: 0,
+      stderr: '',
+      stdout: e.argv.includes('rev-parse')
+        ? '/home/me/projects/some-repo-wt\n/home/me/projects/some-repo/.git/worktrees/some-repo-wt\n/home/me/projects/some-repo/.git\n'
+        : '# branch.head feat/a-long-branch-name\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 a b src/app.ts\n',
+    },
+  }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+  await $.session.start({ cwd: '/home/me/projects/some-repo-wt', surface: 'terminal', isInteractive: true })
+  const line = '~/projects/some-repo-wt · ⎇ some-repo · feat/a-long-branch-name ⊂ some-repo-wt ↑2 ↓1 · 1 changed'
+
+  // Act
+  const sut = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 200 } })
+  const right = await sut.find({ type: 'Box', key: 'right' })
+  const left = await sut.find({ type: 'Box', key: 'left' })
+  const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
+
+  // Assert
+  expect(right?.props.width).toBe(line.length)
+  expect(left?.props.width).toBe(200 - line.length - 3)
+  expect(texts.indexOf('~/projects/some-repo-wt')).toBeLessThan(texts.indexOf('feat/a-long-branch-name'))
+  await sut.unmount()
+})
+
+test('Given a resumed transcript holding task calls, When the band draws wide before any new call, Then the task row shows them', async ($, on) => {
+  // Arrange
+  const answered = (id: string, tool: string, input: Record<string, unknown>, result?: unknown) =>
+    ({ tool_use_id: id, tool, input, result, text: 'ok' })
+  const transcript = [
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [
+        answered('u1', 'TaskCreate', { subject: 'Write tests', description: '', activeForm: 'Writing tests' }, { task: { id: '1' } }),
+        answered('u2', 'TaskCreate', { subject: 'Ship', description: '' }, { task: { id: '2' } }),
+        { ...answered('u3', 'TaskCreate', { subject: 'Refused', description: '' }), isError: true },
+        answered('u4', 'TaskUpdate', { taskId: '1', status: 'in_progress' }),
+      ],
+    },
+  ]
+  await quietSession($, on, transcript)
+
+  // Act
+  const sut = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 } })
+  const texts = (await sut.findAll({ type: 'Text' })).map(found => found.text)
+
+  // Assert
+  expect(texts).toContain('▸ Writing tests')
+  expect(texts).toContain('0/2')
   await sut.unmount()
 })

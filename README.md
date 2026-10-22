@@ -1,18 +1,19 @@
 # simple-status-line
 
-A Claude Code mod that draws a quiet three-pane band above the prompt.
+A Claude Code mod that draws a quiet two-pane band above the prompt.
 
 ```
- task + agents          │   model · effort          │  session cost · cache hit · warm
- (status, file/command) │   path · git · worktree   │  5h limit · 7d limit
-                        │   turn pulse · last error │  context · legend
+ turn pulse                     │  model · effort · session cost · cache hit · warm
+ task + agents                  │  path · git · worktree
+ (status, file/command)         │  last error
+                                │  5h limit · 7d limit
+                                │  context · legend
 ```
 
-- **Left**: current task, one `⧗` row per background shell or monitor (refreshed at turn end), agents with status and their latest file or command.
-- **Center**, untitled rows: model and effort (effort from the first request on), path, `⎇` branch · ahead/behind · changes with `⊂` linked worktree (repo name only when the path does not already end with it), `▶`/`✓` turn pulse (elapsed · tools · files · tokens out · failures), last failure.
-- **Right**, untitled rows: session cost, cache hit rate and time until cold with a one-shot `Warm` button (no automatic warming), 5h and 7d limits side by side on one line with pace marks, context bar by category with the auto-compact mark and its legend.
+- **Left**, every column the right pane leaves: `▶`/`✓` turn pulse (elapsed · tools · files · tokens out · failures), current task, one `⧗` row per background shell or monitor (refreshed at turn end), agents with status and their latest file or command.
+- **Right**, as wide as its longest line (at least 48 columns, at most 60% of the band), untitled rows: model and effort (effort from the first request on) then session cost, cache hit rate and time until cold with a one-shot `Warm` button (no automatic warming); path then `⎇` branch · ahead/behind · changes with `⊂` linked worktree (repo name only when the path does not already end with it); last failure; 5h and 7d limits side by side with pace marks; context bar by category with the auto-compact mark, usage as `used/auto-max` with the auto-compact threshold in the mark's colour, and the legend.
 
-Below 100 columns only the right-pane gauges are shown.
+Below 100 columns only the right pane is shown, full width.
 
 ## Install
 
