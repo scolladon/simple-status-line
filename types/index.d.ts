@@ -40,6 +40,8 @@ export type WorkspaceView = {
   worktree: string | null
 }
 
+export type ModelView = { name: string; effort: string | null }
+
 export type Failure = {
   tool: string
   target: string | null
@@ -72,6 +74,7 @@ declare module 'claude-code' {
       workspace: WorkspaceView | null
       pulse: PulseView
       cost: number | null
+      model: ModelView | null
     }
   }
 }

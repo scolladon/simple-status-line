@@ -4,12 +4,13 @@ import type { Elements, EngineInterface, On } from 'claude-code'
 import type { Failure, PulseView } from '../types'
 import { refreshWorkspace } from './workspace'
 
-const LABEL_WIDTH = 9
 const SECOND = 1000
 const MINUTE = 60 * SECOND
 const EXIT_CODE = /^Exit code (\d+)$/
 const DENIED_GLYPH = '⊘'
 const FAILED_GLYPH = '✗'
+const RUNNING_GLYPH = '▶ '
+const DONE_GLYPH = '✓ '
 
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 
@@ -132,16 +133,19 @@ const stats = ({ Text }: Tags, view: PulseView, at: number) => {
     `${tokens(view.outTokens)} out`,
   ]
 
+  const isRunning = view.endedAt === null
+
   return (
     <Text wrap="truncate-end">
-      <Text color={view.endedAt === null ? 'claude' : 'text'}>{parts[0]}</Text>
+      <Text color={isRunning ? 'claude' : 'success'}>{isRunning ? RUNNING_GLYPH : DONE_GLYPH}</Text>
+      <Text color={isRunning ? 'claude' : 'text'}>{parts[0]}</Text>
       <Text dimColor>{` · ${parts.slice(1).join(' · ')}`}</Text>
       {view.errors > 0 && <Text color="error">{` · ${view.errors} failed`}</Text>}
     </Text>
   )
 }
 
-const failureRow = ({ Box, Text }: Tags, failure: Failure) => {
+const failureRow = ({ Text }: Tags, failure: Failure) => {
   const parts = [
     failure.target ?? failure.tool,
     ...(failure.exitCode === null ? [] : [`exit ${failure.exitCode}`]),
@@ -149,32 +153,21 @@ const failureRow = ({ Box, Text }: Tags, failure: Failure) => {
   ]
 
   return (
-    <Box key="failure" flexDirection="row">
-      <Box width={LABEL_WIDTH} flexShrink={0} />
-      <Text color={failure.isDenied ? 'warning' : 'error'} wrap="truncate-end">
-        {`${failure.isDenied ? DENIED_GLYPH : FAILED_GLYPH} ${parts.join(' · ')}`}
-      </Text>
-    </Box>
+    <Text key="failure" color={failure.isDenied ? 'warning' : 'error'} wrap="truncate-end">
+      {`${failure.isDenied ? DENIED_GLYPH : FAILED_GLYPH} ${parts.join(' · ')}`}
+    </Text>
   )
 }
 
 export async function pulseRows($: EngineInterface, tags: Tags, at: number) {
-  const { Box, Text } = tags
   const view = await readPulse($)
 
   if (view.startedAt === null) {
     return []
   }
 
-  const label = view.endedAt === null ? 'Turn' : 'Last turn'
-
   return [
-    <Box key="turn" flexDirection="row">
-      <Box width={LABEL_WIDTH + (label.length >= LABEL_WIDTH ? 1 : 0)} flexShrink={0}>
-        <Text dimColor>{label}</Text>
-      </Box>
-      {stats(tags, view, at)}
-    </Box>,
+    <tags.Box key="turn">{stats(tags, view, at)}</tags.Box>,
     ...(view.lastFailure === null ? [] : [failureRow(tags, view.lastFailure)]),
   ]
 }
