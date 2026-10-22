@@ -3,13 +3,14 @@
 A Claude Code mod that draws a quiet three-pane band above the prompt.
 
 ```
- task + agents          │   path · git · worktree   │  session cost · cache hit · warm
- (status, file/command) │   turn pulse · last error │  limit 5h / limit 7d · context
+ task + agents          │   model · effort          │  session cost · cache hit · warm
+ (status, file/command) │   path · git · worktree   │  5h limit · 7d limit
+                        │   turn pulse · last error │  context · legend
 ```
 
 - **Left**: current task, one `⧗` row per background shell or monitor (refreshed at turn end), agents with status and their latest file or command.
-- **Center**: path, git repo · branch · ahead/behind · changes, linked worktree, turn pulse (elapsed · tools · files · tokens out · failures), last failure.
-- **Right**: session cost, cache hit rate and time until cold with a one-shot `Warm` button (no automatic warming), 5h and 7d limits with pace marks, context bar by category with the auto-compact mark.
+- **Center**, untitled rows: model and effort (effort from the first request on), path, `⎇` branch · ahead/behind · changes with `⊂` linked worktree (repo name only when the path does not already end with it), `▶`/`✓` turn pulse (elapsed · tools · files · tokens out · failures), last failure.
+- **Right**, untitled rows: session cost, cache hit rate and time until cold with a one-shot `Warm` button (no automatic warming), 5h and 7d limits side by side on one line with pace marks, context bar by category with the auto-compact mark and its legend.
 
 Below 100 columns only the right-pane gauges are shown.
 

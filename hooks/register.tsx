@@ -12,6 +12,7 @@ import type {
 import type { CacheView, ContextView, LimitWindow, Slice } from '../types'
 
 import { activityPane, pollAgents, registerActivity, startActivity } from './activity'
+import { modelRows, recordStep, startModel } from './model'
 import { addOutput, endPulse, pulseRows, readCost, registerPulse, saveCost, startPulse, usd } from './pulse'
 import { refreshWorkspace, registerWorkspace, startWorkspace, workspaceRows } from './workspace'
 
@@ -26,12 +27,14 @@ const TTL_MS: Record<string, number> = { '1h': HOUR, '5m': 5 * MINUTE }
 const LIMITS_KEY = 'limits'
 const WARM_PROMPT = 'Reply with the single word OK.'
 
-const LABEL_WIDTH = 9
 const MIN_BAR = 8
+const MIN_LIMIT_BAR = 3
+const WINDOW_TAG_WIDTH = 2
 const PERCENT_WIDTH = 4
 const RESET_WIDTH = 6
-// Percent, reset and the gaps after the bar and the percent.
-const LIMIT_ROW_FIXED = PERCENT_WIDTH + RESET_WIDTH + 2
+// Tag, percent, reset and the three gaps around the bar and the percent.
+const LIMIT_WINDOW_FIXED = WINDOW_TAG_WIDTH + PERCENT_WIDTH + RESET_WIDTH + 3
+const LIMIT_WINDOW_GAP = 2
 const LEGEND_SIZE = 5
 const SPLIT_MIN_COLUMNS = 100
 const PANE_SHARE = 1 / 3
@@ -205,12 +208,6 @@ async function warm($: EngineInterface) {
   }
 }
 
-const label = ({ Box, Text }: Tags, text: string) => (
-  <Box minWidth={LABEL_WIDTH} flexShrink={0}>
-    <Text dimColor>{text}</Text>
-  </Box>
-)
-
 const limitBar = ({ Text }: Tags, percent: number, paceAt: number | null, width: number) => {
   const eighths = Math.round((clamp(percent, 100) / 100) * width * 8)
   const full = Math.floor(eighths / 8)
@@ -229,17 +226,14 @@ const limitBar = ({ Text }: Tags, percent: number, paceAt: number | null, width:
   )
 }
 
-const limitRow = (tags: Tags, window: LimitWindow, at: number, width: number) => {
+const limitWindow = (tags: Tags, window: LimitWindow, at: number, barWidth: number) => {
   const { Box, Text } = tags
   const shown = effectiveWindow(window, at)
   const left = shown.resetsAt === undefined ? null : Date.parse(shown.resetsAt) - at
-  const barWidth = Math.max(MIN_BAR, width - LABEL_WIDTH - LIMIT_ROW_FIXED)
 
   return (
-    <Box key={window.kind} flexDirection="row" gap={1} width={width}>
-      <Box width={LABEL_WIDTH - 1} flexShrink={0}>
-        <Text dimColor>{`Limit ${WINDOW_LABEL[window.kind] ?? window.kind}`}</Text>
-      </Box>
+    <Box key={window.kind} flexDirection="row" gap={1} flexShrink={0}>
+      <Text dimColor>{WINDOW_LABEL[window.kind] ?? window.kind}</Text>
       {limitBar(tags, shown.percentUsed, pace(shown, at), barWidth)}
       <Box minWidth={PERCENT_WIDTH} justifyContent="flex-end">
         <Text color={limitTone(shown.percentUsed)}>{`${Math.round(shown.percentUsed)}%`}</Text>
@@ -251,10 +245,23 @@ const limitRow = (tags: Tags, window: LimitWindow, at: number, width: number) =>
   )
 }
 
-const limitRows = (tags: Tags, list: readonly LimitWindow[], at: number, width: number) =>
-  SHOWN_WINDOWS.map(kind => list.find(window => window.kind === kind))
+const limitRow = (tags: Tags, list: readonly LimitWindow[], at: number, width: number) => {
+  const shown = SHOWN_WINDOWS.map(kind => list.find(window => window.kind === kind))
     .filter((window): window is LimitWindow => window !== undefined)
-    .map(window => limitRow(tags, window, at, width))
+
+  if (shown.length === 0) {
+    return null
+  }
+
+  const gaps = (shown.length - 1) * LIMIT_WINDOW_GAP
+  const barWidth = Math.max(MIN_LIMIT_BAR, Math.floor((width - gaps) / shown.length) - LIMIT_WINDOW_FIXED)
+
+  return (
+    <tags.Box key="limits" flexDirection="row" justifyContent="space-between" width={width}>
+      {shown.map(window => limitWindow(tags, window, at, barWidth))}
+    </tags.Box>
+  )
+}
 
 const stackedBar = ({ Text }: Tags, view: ContextView, width: number) => {
   let cumulative = 0
@@ -315,14 +322,11 @@ const contextRows = (tags: Tags, view: ContextView | null, width: number) => {
   const isNearAuto = view.autoAt !== null && view.used >= view.autoAt * 0.9
   const tail = [percent, usage, auto].filter(text => text !== '')
   const tailWidth = tail.reduce((sum, text) => sum + text.length + 1, 0)
-  const barWidth = Math.max(MIN_BAR, width - LABEL_WIDTH - tailWidth)
+  const barWidth = Math.max(MIN_BAR, width - tailWidth)
 
   return (
     <Box key="context" flexDirection="column">
       <Box flexDirection="row" gap={1}>
-        <Box width={LABEL_WIDTH - 1} flexShrink={0}>
-          <Text dimColor>Context</Text>
-        </Box>
         {stackedBar(tags, view, barWidth)}
         <Text color={isNearAuto ? 'warning' : 'text'}>{percent}</Text>
         <Text dimColor>{usage}</Text>
@@ -362,10 +366,8 @@ const cacheRow = (
 
   return (
     <Box key="cache" flexDirection="row" justifyContent="flex-end" gap={1} width={width}>
-      {sessionCost !== null && <Text dimColor>Session</Text>}
       {sessionCost !== null && <Text>{usd(sessionCost)}</Text>}
       {sessionCost !== null && <Text dimColor>·</Text>}
-      <Text dimColor>Cache</Text>
       <Text>{view.hitPercent === null ? '–' : `${Math.round(view.hitPercent)}% hit`}</Text>
       {view.sentAt !== null && <Text dimColor>·</Text>}
       {warmthText(tags, view, at, ttlMs)}
@@ -397,6 +399,7 @@ export const register: Register = (on, options) => {
     await refreshContext($)
     await startActivity($, e.cwd)
     await startWorkspace($, e.cwd)
+    await startModel($)
     $.clock.every(SECOND, () => void tick($, ttlMs))
 
     return next(e)
@@ -431,6 +434,7 @@ export const register: Register = (on, options) => {
       isTurnRunning = true
       const at = await $.clock.now()
       await update($, cache, view => ({ ...view, sentAt: at }))
+      await recordStep($, e.effort)
 
       if (e.index === 0) {
         await startPulse($, at)
@@ -483,16 +487,16 @@ export const register: Register = (on, options) => {
     const width = isSplit ? paneWidth : e.props.bodyColumns
     const centerWidth = e.props.bodyColumns - 2 * paneWidth - SEPARATOR_WIDTH
     const contextView = await read($, context)
-    const limitList = limitRows(tags, await read($, limits), at, width)
+    const limitLine = limitRow(tags, await read($, limits), at, width)
     const gauges = [
       cacheRow(tags, await read($, cache), at, ttlMs, width, await readCost($), () => void warm($)),
-      ...limitList,
+      limitLine,
       contextRows(tags, contextView, width),
     ]
-    const gaugeHeight = 1 + limitList.length + (contextView === null ? 0 : 2)
+    const gaugeHeight = 1 + (limitLine === null ? 0 : 1) + (contextView === null ? 0 : 2)
     const height = Math.max(MIN_LEFT_ROWS, gaugeHeight)
     const right = <tags.Box flexDirection="column" width={width}>{gauges}</tags.Box>
-    const center = [...(await workspaceRows($, tags)), ...(await pulseRows($, tags, at))]
+    const center = [...(await modelRows($, tags)), ...(await workspaceRows($, tags)), ...(await pulseRows($, tags, at))]
     const separator = (key: string) => (
       <tags.Box key={key} width={SEPARATOR_WIDTH} flexShrink={0} justifyContent="center">
         <tags.Text dimColor>{Array.from({ length: Math.max(height, center.length) }, () => SEPARATOR).join('\n')}</tags.Text>

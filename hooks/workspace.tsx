@@ -1,10 +1,11 @@
 import { atom, read, update } from 'claude-code'
-import type { Elements, EngineInterface, On, RenderChildren } from 'claude-code'
+import type { Elements, EngineInterface, On } from 'claude-code'
 
 import type { WorkspaceView } from '../types'
 
-const LABEL_WIDTH = 9
 const GIT_TIMEOUT_MS = 5000
+const BRANCH_GLYPH = '⎇ '
+const WORKTREE_GLYPH = '⊂'
 
 type Tags = Pick<Elements['terminal'], 'Box' | 'Text'>
 type GitStatus = Pick<WorkspaceView, 'branch' | 'ahead' | 'behind' | 'changed'>
@@ -94,27 +95,22 @@ export const registerWorkspace = (on: On) => {
   }).catch(($, e, next) => next(e))
 }
 
-const row = ({ Box, Text }: Tags, label: string, children: RenderChildren) => (
-  <Box key={label} flexDirection="row">
-    <Box width={LABEL_WIDTH} flexShrink={0}>
-      <Text dimColor>{label}</Text>
-    </Box>
-    {children}
-  </Box>
-)
-
 const gitLine = ({ Text }: Tags, view: WorkspaceView) => {
   if (view.repo === null) {
     return <Text dimColor>not a repository</Text>
   }
 
   const sync = [view.ahead > 0 ? `↑${view.ahead}` : '', view.behind > 0 ? `↓${view.behind}` : ''].filter(part => part !== '')
+  // The path already ends with the repo name when opened at its root; repeating it is noise.
+  const isRepoInPath = basename(view.path) === view.repo
 
   return (
     <Text wrap="truncate-end">
-      <Text bold>{view.repo}</Text>
-      <Text dimColor> · </Text>
+      <Text dimColor>{BRANCH_GLYPH}</Text>
+      {!isRepoInPath && <Text bold>{view.repo}</Text>}
+      {!isRepoInPath && <Text dimColor> · </Text>}
       <Text color="suggestion">{view.branch ?? 'detached'}</Text>
+      {view.worktree !== null && <Text color="warning">{` ${WORKTREE_GLYPH} ${view.worktree}`}</Text>}
       {sync.length > 0 && <Text color="warning">{` ${sync.join(' ')}`}</Text>}
       <Text dimColor>{view.changed > 0 ? ` · ${view.changed} changed` : ' · clean'}</Text>
     </Text>
@@ -129,8 +125,7 @@ export async function workspaceRows($: EngineInterface, tags: Tags) {
   }
 
   return [
-    row(tags, 'Path', <tags.Text wrap="truncate-start">{view.path}</tags.Text>),
-    row(tags, 'Git', gitLine(tags, view)),
-    ...(view.worktree === null ? [] : [row(tags, 'Worktree', <tags.Text color="warning">{view.worktree}</tags.Text>)]),
+    <tags.Text key="path" wrap="truncate-start">{view.path}</tags.Text>,
+    <tags.Box key="git">{gitLine(tags, view)}</tags.Box>,
   ]
 }
